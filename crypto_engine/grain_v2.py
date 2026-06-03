@@ -6,7 +6,6 @@ class Grain128AEADv2:
     def load_key_and_iv(self,key_bits,iv_bits):
         self.key_bits=key_bits.copy()
         self.NFSR=key_bits.copy()
-        self.LFSR=iv_bits.copy()
         self.LFSR[:96]=iv_bits.copy()
         self.LFSR[96:127]=[1]*31
         self.LFSR[127]=0
@@ -54,7 +53,7 @@ class Grain128AEADv2:
                 y_t=self._pre_output()
                 i=t//2
                 z_i=y_t
-                ciphertext_bits[i]=message_bits[i]^z_i
+                ciphertext_bits[i]=z_i^message_bits[i]
             l_val=self._L()
             f_val=self._F()
             s_127=l_val
@@ -66,13 +65,13 @@ class Grain128AEADv2:
         return ciphertext_bits
     def decrypt(self,ciphertext_bits):
         L=len(ciphertext_bits)
-        message=[0]*L
+        message_bits=[0]*L
         for t in range(2*L):
             if t%2==0:
                 y_t=self._pre_output()
                 i=t//2
                 z_i=y_t
-                message[i]=ciphertext_bits[i]^z_i
+                message_bits[i]=z_i^ciphertext_bits[i]
             l_val=self._L()
             f_val=self._F()
             s_127=l_val
@@ -81,5 +80,5 @@ class Grain128AEADv2:
             self.LFSR.append(s_127)
             self.NFSR.pop(0)
             self.NFSR.append(b_127)
-        return message
+        return message_bits
                 

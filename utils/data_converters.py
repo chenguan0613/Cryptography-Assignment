@@ -16,3 +16,12 @@ def lsb_bits_to_hex(bit_list):
                 byte|=(bit_list[i+j] & 1)<<j
         hex_string+=format(byte,'02x')
     return hex_string
+
+def string_to_lsb_bits(text):
+    hex_string=text.encode().hex()
+    return hex_to_lsb_bits(hex_string)
+
+def lsb_bits_to_string(bit_list):
+    hex_string=lsb_bits_to_hex(bit_list)
+    byte_data=bytes.fromhex(hex_string[2:])
+    return byte_data.decode()
