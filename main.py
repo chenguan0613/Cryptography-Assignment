@@ -4,4 +4,4 @@ if __name__ == "__main__":
     bits=hex_to_lsb_bits(test_hex)
     print(f"Hex: {test_hex} -> Bits: {bits}")
     reconstructed_hex=lsb_bits_to_hex(bits)
-    print(f"Bits: {bits} -> Reconstructed Hex: {reconstructed_hex}")
+    print(f"Bits: {bits} ->Reconstructed Hex: {reconstructed_hex}")
