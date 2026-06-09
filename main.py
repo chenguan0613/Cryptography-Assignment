@@ -23,7 +23,8 @@ class GrainApp(QMainWindow):
         self.ui = Ui_MainWindow()
         self.ui.setupUi(self)
         self.setWindowTitle("Grain-128AEAD Cipher Console")
-
+        self.setFixedSize(832, 655)
+        
         self.key_manager = KeyManager()
         self.file_handler = FileHandler()
 
@@ -43,7 +44,9 @@ class GrainApp(QMainWindow):
         self.ui.btn_generate_key.clicked.connect(self.logic_generate_key)
         self.ui.btn_wrap_save.clicked.connect(self.logic_wrap_key)
         self.ui.btn_load_key.clicked.connect(self.logic_unwrap_key)
-        
+        self.ui.btn_generate_aes_nonce.clicked.connect(self.logic_generate_aes_nonce)
+        self.ui.btn_generate_salt.clicked.connect(self.logic_generate_salt)
+
         # 区块 2
         self.ui.btn_generate_iv.clicked.connect(self.logic_generate_iv)
 
@@ -81,7 +84,7 @@ class GrainApp(QMainWindow):
     # ================= 辅助函数 =================
     def show_error(self, title, exception_obj):
         error_details = traceback.format_exc()
-        print(f"\n{'='*20} ❌ {title} {'='*20}")
+        print(f"\n{'='*20} {title} {'='*20}")
         print(error_details)
         print("========================================================\n")
         
@@ -121,7 +124,13 @@ class GrainApp(QMainWindow):
     # ================= 核心业务逻辑 =================
 
     def logic_generate_key(self):
-        self.ui.input_key.setText("0x" + self.key_manager.generate_random_key_hex())
+        self.ui.input_key.setText("0x"+self.key_manager.generate_random_key_hex())
+
+    def logic_generate_aes_nonce(self):
+        self.ui.input_aes_nonce.setText("0x"+secrets.token_hex(12))
+
+    def logic_generate_salt(self):
+        self.ui.input_salt.setText("0x"+secrets.token_hex(16))
 
     def logic_generate_iv(self):
         if self.ui.check_auto_iv.isChecked():
@@ -135,6 +144,10 @@ class GrainApp(QMainWindow):
             key_hex = self.ui.input_key.text()
             ad = self.ui.input_ad.text().strip()
             
+            salt_val=self.ui.input_salt.text().strip()
+            iters_val=self.ui.input_iterations.text().strip()
+            nonce_val=self.ui.input_aes_nonce.text().strip()
+
             if not pwd or not key_hex:
                 raise ValueError("Password 和 Key 不能为空。")
             
@@ -146,17 +159,39 @@ class GrainApp(QMainWindow):
                 except ValueError:
                     raise ValueError("AD 格式冲突：您选择了 Hex 模式，但输入了非十六进制的普通字符！")
 
-            wrapped_data = self.key_manager.wrap_key(pwd, key_hex, ad, is_hex)
+            wrapped_data = self.key_manager.wrap_key(
+                password_str=pwd, 
+                grain_key_hex=key_hex, 
+                ad_data=ad, 
+                ad_is_hex=is_hex,
+                custom_salt_hex=salt_val,
+                custom_iterations=iters_val,
+                custom_nonce_hex=nonce_val
+            )
             
             save_path, _ = QFileDialog.getSaveFileName(self, "Save Wrapped Key", "", "Key Files (*.key)")
             if save_path:
-                # 强制补全后缀
                 if not save_path.endswith(".key"):
-                    save_path += ".key"
+                    save_path +=".key"
                 self.file_handler.save_key_file(wrapped_data, save_path)
-                QMessageBox.information(self, "成功", "密钥已成功加密(Wrap)并保存到文件！")
+                auto_generated = []
+                if not salt_val: 
+                    auto_generated.append(f"Salt (16-byte): 0x{wrapped_data['salt']}")
+                if not iters_val: auto_generated.append(f"Iteration Count: {wrapped_data['iterations']} times")
+                if not nonce_val: auto_generated.append(f"Nonce (AES-CCM): 0x{wrapped_data['nonce']}")
+                if auto_generated:
+                    # 如果有留空的项，明确告知用户系统代劳了
+                    items_str = "\n• ".join(auto_generated)
+                    success_msg = (f"密钥已成功包裹并保存！\n\n"
+                    f"【系统提示】\n您未提供以下参数，系统为您自动生成了高强度安全值：\n"
+                                f"• {items_str}\n\n"
+                                f"您可以打开 .key 文件查看这些由系统生成的最终数据。")
+                else:
+                    #如果用户全都自己填了，给出完全自定义的反馈
+                    success_msg = "密钥已完全按照您输入的自定义参数包裹并保存！"
+                QMessageBox.information(self, "成功",success_msg)
         except Exception as e:
-            self.show_error("Key Wrapping 失败", e)
+            self.show_error("Key Wrapping 失败",e)
 
     def logic_unwrap_key(self):
         try:

@@ -1,5 +1,4 @@
 import os
-import json
 import secrets
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
@@ -12,35 +11,50 @@ class KeyManager:
     def generate_random_key_hex():
         return secrets.token_hex(16)
     
-    def wrap_key(self,password_str,grain_key_hex,ad_data,ad_is_hex=False):
+    def wrap_key(self,password_str,grain_key_hex,ad_data,ad_is_hex=False,
+                custom_salt_hex="", custom_iterations="", custom_nonce_hex=""):
         # Derive a key from the password
         if ad_is_hex:
             ad_bytes=bytes.fromhex(ad_data.replace("0x",""))
         else:
             ad_bytes=ad_data.encode('utf-8')
-        # Generate random salt and nonce
-        salt=os.urandom(16)
-        nonce=os.urandom(12)
+        #Salt
+        if custom_salt_hex:
+            salt=bytes.fromhex(custom_salt_hex.replace("0x",""))
+        else:
+            salt=os.urandom(16)
+        #Nonce
+        if custom_nonce_hex:
+            nonce=bytes.fromhex(custom_nonce_hex.replace("0x",""))
+        else:
+            nonce=os.urandom(12)
+        #iteration
+        if custom_iterations:
+            iterations_to_use=int(custom_iterations)
+        else:
+            iterations_to_use=self.iterations
+        
         kdf=PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=16,
             salt=salt,
-            iterations=self.iterations,
+            iterations=iterations_to_use,
         )
         key_wrap=kdf.derive(password_str.encode('utf-8'))
+        print(f"\nDerived Wrapping Key (K_wrap): {key_wrap.hex()}\n")
         grain_key_bytes=bytes.fromhex(grain_key_hex.replace("0x",""))
         aesccm=AESCCM(key_wrap)
         #Encrypt and generate MAC
         encrypted_data=aesccm.encrypt(nonce,grain_key_bytes,ad_bytes)
-        ciphertext=encrypted_data[:-16]
+        encrypted_key=encrypted_data[:-16]
         mac=encrypted_data[-16:]
         # Return wrapped key as JSON string
         return {
             "salt": salt.hex(),
-            "iterations": self.iterations,
+            "iterations": iterations_to_use,
             "nonce": nonce.hex(),
             "mac": mac.hex(),
-            "ciphertext": ciphertext.hex()
+            "encrypted_key": encrypted_key.hex()
         }
     
     def unwrap_key(self, password_str, key_file_data, ad_data, ad_is_hex=False):
@@ -54,7 +68,7 @@ class KeyManager:
         iterations=key_file_data["iterations"]
         nonce=bytes.fromhex(key_file_data["nonce"])
         mac=bytes.fromhex(key_file_data["mac"])
-        encrypted_key=bytes.fromhex(key_file_data["ciphertext"])
+        encrypted_key=bytes.fromhex(key_file_data["encrypted_key"])
 
         kdf=PBKDF2HMAC(
             algorithm=hashes.SHA256(),
